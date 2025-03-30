@@ -1,4 +1,4 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pl">
 <head>
   <meta charset="UTF-8" />
@@ -27,7 +27,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
 
   <script>
-    // 🔐 Twoja konfiguracja Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyC29bZzw93TOpevC9RsuCqszVgIUK9fcA8",
       authDomain: "mapagps-4d2bf.firebaseapp.com",
@@ -45,19 +44,18 @@
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // 🔄 Wczytanie lokalizacji z Firebase
+    // Wczytanie zapisanych lokalizacji
     db.collection("lokalizacje").get().then((querySnapshot) => {
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         const opis = data.opis || "Brak opisu";
         const timestamp = data.timestamp?.toDate().toLocaleString() || "Brak daty";
-
         L.marker([data.lat, data.lng]).addTo(map)
           .bindPopup(`<b>${opis}</b><br><i>${timestamp}</i>`);
       });
     });
 
-    // 🔘 Obsługa przycisku GPS
+    // Zapis lokalizacji po kliknięciu
     document.getElementById("gps-btn").addEventListener("click", () => {
       const opis = document.getElementById("opis").value.trim();
 
@@ -66,13 +64,28 @@
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
 
-          // Dodanie znacznika
           L.marker([lat, lng]).addTo(map)
             .bindPopup(`<b>${opis || "Twoja lokalizacja"}</b>`).openPopup();
           map.setView([lat, lng], 13);
 
-          // Zapis do Firestore
           db.collection("lokalizacje").add({
             lat, lng, opis,
-            timestamp: firebase.firestore.Field
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          }).then(() => {
+            console.log("Zapisano lokalizację.");
+            document.getElementById("opis").value = "";
+          }).catch((err) => {
+            console.error("Błąd zapisu:", err);
+            alert("Nie udało się zapisać.");
+          });
 
+        }, () => {
+          alert("Nie można pobrać lokalizacji.");
+        });
+      } else {
+        alert("Twoja przeglądarka nie obsługuje geolokalizacji.");
+      }
+    });
+  </script>
+</body>
+</html>
