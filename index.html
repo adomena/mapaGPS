@@ -8,17 +8,18 @@
   <style>
     html, body { height: 100%; margin: 0; padding: 0; }
     #map { height: 85vh; width: 100%; }
-    #controls { margin: 10px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-    #opis, #dataOd, #dataDo {
-      padding: 6px;
+    #controls {
+      margin: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    input, button {
+      padding: 10px;
       font-size: 16px;
     }
     #opis { width: 200px; }
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
@@ -53,4 +54,116 @@
     const db = firebase.firestore();
 
     const map = L.map('map').setView([52.1, 19.1], 6);
-    L.tileLayer('https://{s}.tile.openstreet
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap'
+    });
+    tiles.addTo(map);
+
+    let ostatniZapisId = null;
+    let ostatniMarker = null;
+
+    function wczytajLokalizacje(query) {
+      map.eachLayer(layer => {
+        if (layer instanceof L.Marker) {
+          map.removeLayer(layer);
+        }
+      });
+      tiles.addTo(map);
+
+      query.get().then((querySnapshot) => {
+        if (querySnapshot.empty) {
+          alert("Brak wyników w wybranym zakresie dat.");
+        }
+
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          const opis = data.opis || "Brak opisu";
+          const timestamp = data.timestamp?.toDate().toLocaleString() || "Brak daty";
+
+          L.marker([data.lat, data.lng]).addTo(map)
+            .bindPopup(`<b>${opis}</b><br><i>${timestamp}</i>`);
+        });
+      }).catch((error) => {
+        console.error("Błąd podczas pobierania:", error);
+      });
+    }
+
+    // Wczytanie wszystkich lokalizacji na starcie
+    wczytajLokalizacje(db.collection("lokalizacje"));
+
+    document.getElementById("gps-btn").addEventListener("click", () => {
+      const opis = document.getElementById("opis").value.trim();
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          const marker = L.marker([lat, lng]).addTo(map)
+            .bindPopup(`<b>${opis || "Twoja lokalizacja"}</b>`).openPopup();
+          map.setView([lat, lng], 13);
+
+          db.collection("lokalizacje").add({
+            lat, lng, opis,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          }).then((docRef) => {
+            console.log("Zapisano lokalizację.");
+            ostatniZapisId = docRef.id;
+            ostatniMarker = marker;
+            document.getElementById("opis").value = "";
+          }).catch((err) => {
+            console.error("Błąd zapisu:", err);
+            alert("Nie udało się zapisać.");
+          });
+
+        }, () => {
+          alert("Nie można pobrać lokalizacji.");
+        });
+      } else {
+        alert("Twoja przeglądarka nie obsługuje geolokalizacji.");
+      }
+    });
+
+    document.getElementById("undo-btn").addEventListener("click", () => {
+      if (!ostatniZapisId) {
+        alert("Brak lokalizacji do cofnięcia.");
+        return;
+      }
+
+      db.collection("lokalizacje").doc(ostatniZapisId).delete()
+        .then(() => {
+          console.log("Usunięto ostatnią lokalizację.");
+          if (ostatniMarker) {
+            map.removeLayer(ostatniMarker);
+          }
+          ostatniZapisId = null;
+          ostatniMarker = null;
+        })
+        .catch((error) => {
+          console.error("Błąd przy usuwaniu:", error);
+          alert("Nie udało się usunąć lokalizacji.");
+        });
+    });
+
+    document.getElementById("filtruj-btn").addEventListener("click", () => {
+      const dataOd = document.getElementById("dataOd").value;
+      const dataDo = document.getElementById("dataDo").value;
+
+      let query = db.collection("lokalizacje");
+
+      if (dataOd) {
+        const od = new Date(dataOd);
+        query = query.where("timestamp", ">=", firebase.firestore.Timestamp.fromDate(od));
+      }
+
+      if (dataDo) {
+        const do_ = new Date(dataDo);
+        do_.setHours(23, 59, 59, 999);
+        query = query.where("timestamp", "<=", firebase.firestore.Timestamp.fromDate(do_));
+      }
+
+      wczytajLokalizacje(query);
+    });
+  </script>
+</body>
+</html>
