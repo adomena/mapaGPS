@@ -1,0 +1,78 @@
+<<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mapa z GPS i Firebase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    #map { height: 85vh; width: 100%; }
+    #controls { margin: 10px; }
+    #opis { width: 300px; padding: 6px; font-size: 16px; }
+    #gps-btn { padding: 10px 20px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <input type="text" id="opis" placeholder="Wpisz opis lokalizacji..." />
+    <button id="gps-btn">📍 Zapisz lokalizację GPS</button>
+  </div>
+  <div id="map"></div>
+
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+
+  <script>
+    // 🔐 Twoja konfiguracja Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyC29bZzw93TOpevC9RsuCqszVgIUK9fcA8",
+      authDomain: "mapagps-4d2bf.firebaseapp.com",
+      projectId: "mapagps-4d2bf",
+      storageBucket: "mapagps-4d2bf.appspot.com",
+      messagingSenderId: "110483322372",
+      appId: "1:110483322372:web:42a26764c176db56e2751"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const map = L.map('map').setView([52.1, 19.1], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    // 🔄 Wczytanie lokalizacji z Firebase
+    db.collection("lokalizacje").get().then((querySnapshot) => {
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const opis = data.opis || "Brak opisu";
+        const timestamp = data.timestamp?.toDate().toLocaleString() || "Brak daty";
+
+        L.marker([data.lat, data.lng]).addTo(map)
+          .bindPopup(`<b>${opis}</b><br><i>${timestamp}</i>`);
+      });
+    });
+
+    // 🔘 Obsługa przycisku GPS
+    document.getElementById("gps-btn").addEventListener("click", () => {
+      const opis = document.getElementById("opis").value.trim();
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          // Dodanie znacznika
+          L.marker([lat, lng]).addTo(map)
+            .bindPopup(`<b>${opis || "Twoja lokalizacja"}</b>`).openPopup();
+          map.setView([lat, lng], 13);
+
+          // Zapis do Firestore
+          db.collection("lokalizacje").add({
+            lat, lng, opis,
+            timestamp: firebase.firestore.Field
+
