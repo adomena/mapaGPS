@@ -2,20 +2,29 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8" />
-  <title>Mapa z GPS i Firebase</title>
+  <title>Mapa GPS + Cofnij</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <style>
-    #map { height: 85vh; width: 100%; }
+    #map { height: 80vh; width: 100%; }
     #controls { margin: 10px; }
-    #opis { width: 300px; padding: 6px; font-size: 16px; }
-    #gps-btn { padding: 10px 20px; font-size: 16px; }
+    #opis {
+      width: 300px;
+      padding: 6px;
+      font-size: 16px;
+    }
+    #gps-btn, #undo-btn {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-left: 5px;
+    }
   </style>
 </head>
 <body>
   <div id="controls">
     <input type="text" id="opis" placeholder="Wpisz opis lokalizacji..." />
     <button id="gps-btn">📍 Zapisz lokalizację GPS</button>
+    <button id="undo-btn">↩️ Cofnij ostatnią</button>
   </div>
   <div id="map"></div>
 
@@ -27,13 +36,14 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
 
   <script>
+    // 🟡 Wklej tu swoją konfigurację Firebase
     const firebaseConfig = {
-      apiKey: "AIzaSyC29bZzw93TOpevC9RsuCqszVgIUK9fcA8",
-      authDomain: "mapagps-4d2bf.firebaseapp.com",
-      projectId: "mapagps-4d2bf",
-      storageBucket: "mapagps-4d2bf.appspot.com",
-      messagingSenderId: "110483322372",
-      appId: "1:110483322372:web:42a26764c176db56e2751"
+      apiKey: "TU_WKLEJ",
+      authDomain: "TU_WKLEJ.firebaseapp.com",
+      projectId: "TU_WKLEJ",
+      storageBucket: "TU_WKLEJ.appspot.com",
+      messagingSenderId: "TU_WKLEJ",
+      appId: "TU_WKLEJ"
     };
 
     firebase.initializeApp(firebaseConfig);
@@ -44,48 +54,9 @@
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // Wczytanie zapisanych lokalizacji
+    // 🔁 Wczytywanie istniejących lokalizacji
     db.collection("lokalizacje").get().then((querySnapshot) => {
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         const opis = data.opis || "Brak opisu";
-        const timestamp = data.timestamp?.toDate().toLocaleString() || "Brak daty";
-        L.marker([data.lat, data.lng]).addTo(map)
-          .bindPopup(`<b>${opis}</b><br><i>${timestamp}</i>`);
-      });
-    });
-
-    // Zapis lokalizacji po kliknięciu
-    document.getElementById("gps-btn").addEventListener("click", () => {
-      const opis = document.getElementById("opis").value.trim();
-
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-
-          L.marker([lat, lng]).addTo(map)
-            .bindPopup(`<b>${opis || "Twoja lokalizacja"}</b>`).openPopup();
-          map.setView([lat, lng], 13);
-
-          db.collection("lokalizacje").add({
-            lat, lng, opis,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-          }).then(() => {
-            console.log("Zapisano lokalizację.");
-            document.getElementById("opis").value = "";
-          }).catch((err) => {
-            console.error("Błąd zapisu:", err);
-            alert("Nie udało się zapisać.");
-          });
-
-        }, () => {
-          alert("Nie można pobrać lokalizacji.");
-        });
-      } else {
-        alert("Twoja przeglądarka nie obsługuje geolokalizacji.");
-      }
-    });
-  </script>
-</body>
-</html>
+        const timestamp = data.timestamp?.toDate().toLocaleString() || "Brak daty
