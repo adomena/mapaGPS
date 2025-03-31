@@ -65,4 +65,157 @@
     const db = firebase.firestore();
 
     const map = L.map('map').setView([52.1, 19.1], 6);
-    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    });
+    tiles.addTo(map);
+
+    let ostatniZapisId = null;
+    let ostatniMarker = null;
+    let lokalMarker = null;
+    let lokalPosition = null;
+
+    function ustawLokalizacjeNaMapie(lat, lng) {
+      if (lokalMarker) {
+        lokalMarker.setLatLng([lat, lng]);
+      } else {
+        lokalMarker = L.circleMarker([lat, lng], {
+          radius: 8,
+          color: '#007bff',
+          fillColor: '#007bff',
+          fillOpacity: 0.8
+        }).addTo(map).bindPopup(T.location);
+      }
+      lokalPosition = [lat, lng];
+    }
+
+    function aktualizujLokalizacje() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          ustawLokalizacjeNaMapie(lat, lng);
+        }, () => {
+          console.warn(T.noLocation);
+        });
+      }
+    }
+
+    function wczytajLokalizacje(query) {
+      map.eachLayer(layer => {
+        if (layer instanceof L.Marker && layer !== lokalMarker) {
+          map.removeLayer(layer);
+        }
+        if (layer instanceof L.TileLayer) {
+          map.removeLayer(layer);
+        }
+      });
+      tiles.addTo(map);
+      if (lokalMarker) lokalMarker.addTo(map);
+
+      query.get().then((querySnapshot) => {
+        if (querySnapshot.empty) {
+          alert(T.noData);
+        }
+
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          const opis = data.opis || "Brak opisu";
+          const timestamp = data.timestamp?.toDate().toLocaleString() || "Brak daty";
+
+          L.marker([data.lat, data.lng]).addTo(map)
+            .bindPopup(`<b>${opis}</b><br><i>${timestamp}</i>`);
+        });
+      }).catch((error) => {
+        console.error("Błąd podczas pobierania:", error);
+      });
+    }
+
+    // 🔄 Automatyczna lokalizacja co 10 sekund
+    aktualizujLokalizacje();
+    setInterval(aktualizujLokalizacje, 10000);
+
+    // ⬇️ Wczytaj zapisane dane
+    wczytajLokalizacje(db.collection("lokalizacje"));
+
+    document.getElementById("gps-btn").addEventListener("click", () => {
+      const opis = document.getElementById("opis").value.trim();
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          const marker = L.marker([lat, lng]).addTo(map)
+            .bindPopup(`<b>${opis || "Twoja lokalizacja"}</b>`).openPopup();
+          map.setView([lat, lng], 13);
+
+          db.collection("lokalizacje").add({
+            lat, lng, opis,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          }).then((docRef) => {
+            ostatniZapisId = docRef.id;
+            ostatniMarker = marker;
+            document.getElementById("opis").value = "";
+          }).catch((err) => {
+            alert("Nie udało się zapisać.");
+          });
+
+        }, () => {
+          alert(T.noLocation);
+        });
+      } else {
+        alert(T.noGeo);
+      }
+    });
+
+    document.getElementById("undo-btn").addEventListener("click", () => {
+      if (!ostatniZapisId) {
+        alert(T.deleteNone);
+        return;
+      }
+
+      db.collection("lokalizacje").doc(ostatniZapisId).delete()
+        .then(() => {
+          if (ostatniMarker) {
+            map.removeLayer(ostatniMarker);
+          }
+          ostatniZapisId = null;
+          ostatniMarker = null;
+        })
+        .catch((error) => {
+          alert(T.deleteFail);
+        });
+    });
+
+    document.getElementById("filtruj-btn").addEventListener("click", () => {
+      const dataOd = document.getElementById("dataOd").value;
+      const dataDo = document.getElementById("dataDo").value;
+
+      let query = db.collection("lokalizacje");
+
+      if (dataOd) {
+        const od = new Date(dataOd);
+        query = query.where("timestamp", ">=", firebase.firestore.Timestamp.fromDate(od));
+      }
+
+      if (dataDo) {
+        const do_ = new Date(dataDo);
+        do_.setHours(23, 59, 59, 999);
+        query = query.where("timestamp", "<=", firebase.firestore.Timestamp.fromDate(do_));
+      }
+
+      wczytajLokalizacje(query);
+    });
+
+    document.getElementById("locate-btn").addEventListener("click", () => {
+      if (lokalPosition) {
+        map.setView(lokalPosition, 13);
+        if (lokalMarker) lokalMarker.openPopup();
+      } else {
+        alert(T.noLocation);
+      }
+    });
+  </script>
+</body>
+</html>
