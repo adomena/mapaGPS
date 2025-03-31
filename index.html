@@ -61,14 +61,16 @@
 
     let ostatniZapisId = null;
     let ostatniMarker = null;
+    let lokalMarker = null;
 
     function wczytajLokalizacje(query) {
       map.eachLayer(layer => {
-        if (layer instanceof L.Marker) {
+        if (layer instanceof L.Marker && layer !== lokalMarker) {
           map.removeLayer(layer);
         }
       });
       tiles.addTo(map);
+      if (lokalMarker) lokalMarker.addTo(map);
 
       query.get().then((querySnapshot) => {
         if (querySnapshot.empty) {
@@ -88,7 +90,25 @@
       });
     }
 
-    // Wczytanie wszystkich lokalizacji na starcie
+    // 🔵 Pokaż niebieską kropkę aktualnej lokalizacji
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        lokalMarker = L.circleMarker([lat, lng], {
+          radius: 8,
+          color: '#007bff',
+          fillColor: '#007bff',
+          fillOpacity: 0.8
+        }).addTo(map).bindPopup("📍 Twoja bieżąca lokalizacja");
+
+        map.setView([lat, lng], 13);
+      }, () => {
+        console.warn("Nie udało się pobrać lokalizacji.");
+      });
+    }
+
     wczytajLokalizacje(db.collection("lokalizacje"));
 
     document.getElementById("gps-btn").addEventListener("click", () => {
