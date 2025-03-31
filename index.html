@@ -30,6 +30,7 @@
     <input type="date" id="dataOd" />
     <input type="date" id="dataDo" />
     <button id="filtruj-btn">🔎 Filtruj</button>
+    <button id="locate-btn">📡 Pokaż gdzie jestem</button>
   </div>
   <div id="map"></div>
 
@@ -41,6 +42,16 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
 
   <script>
+    const isPL = navigator.language.startsWith("pl");
+    const T = {
+      location: isPL ? "📍 Twoja bieżąca lokalizacja" : "📍 Your current location",
+      noLocation: isPL ? "Nie udało się pobrać lokalizacji." : "Unable to get location.",
+      deleteFail: isPL ? "Nie udało się usunąć lokalizacji." : "Failed to delete location.",
+      noData: isPL ? "Brak wyników w wybranym zakresie dat." : "No results in selected date range.",
+      noGeo: isPL ? "Twoja przeglądarka nie obsługuje geolokalizacji." : "Geolocation is not supported.",
+      deleteNone: isPL ? "Brak lokalizacji do cofnięcia." : "No location to undo.",
+    };
+
     const firebaseConfig = {
       apiKey: "AIzaSyC29bZzw93TOpevC9RsuCqszVgIUK9fcA8",
       authDomain: "mapagps-4d2bf.firebaseapp.com",
@@ -54,136 +65,4 @@
     const db = firebase.firestore();
 
     const map = L.map('map').setView([52.1, 19.1], 6);
-    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap'
-    });
-    tiles.addTo(map);
-
-    let ostatniZapisId = null;
-    let ostatniMarker = null;
-    let lokalMarker = null;
-
-    function wczytajLokalizacje(query) {
-      map.eachLayer(layer => {
-        if (layer instanceof L.Marker && layer !== lokalMarker) {
-          map.removeLayer(layer);
-        }
-      });
-      tiles.addTo(map);
-      if (lokalMarker) lokalMarker.addTo(map);
-
-      query.get().then((querySnapshot) => {
-        if (querySnapshot.empty) {
-          alert("Brak wyników w wybranym zakresie dat.");
-        }
-
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          const opis = data.opis || "Brak opisu";
-          const timestamp = data.timestamp?.toDate().toLocaleString() || "Brak daty";
-
-          L.marker([data.lat, data.lng]).addTo(map)
-            .bindPopup(`<b>${opis}</b><br><i>${timestamp}</i>`);
-        });
-      }).catch((error) => {
-        console.error("Błąd podczas pobierania:", error);
-      });
-    }
-
-    // 🔵 Pokaż niebieską kropkę aktualnej lokalizacji
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-
-        lokalMarker = L.circleMarker([lat, lng], {
-          radius: 8,
-          color: '#007bff',
-          fillColor: '#007bff',
-          fillOpacity: 0.8
-        }).addTo(map).bindPopup("📍 Twoja bieżąca lokalizacja");
-
-        map.setView([lat, lng], 13);
-      }, () => {
-        console.warn("Nie udało się pobrać lokalizacji.");
-      });
-    }
-
-    wczytajLokalizacje(db.collection("lokalizacje"));
-
-    document.getElementById("gps-btn").addEventListener("click", () => {
-      const opis = document.getElementById("opis").value.trim();
-
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-
-          const marker = L.marker([lat, lng]).addTo(map)
-            .bindPopup(`<b>${opis || "Twoja lokalizacja"}</b>`).openPopup();
-          map.setView([lat, lng], 13);
-
-          db.collection("lokalizacje").add({
-            lat, lng, opis,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-          }).then((docRef) => {
-            console.log("Zapisano lokalizację.");
-            ostatniZapisId = docRef.id;
-            ostatniMarker = marker;
-            document.getElementById("opis").value = "";
-          }).catch((err) => {
-            console.error("Błąd zapisu:", err);
-            alert("Nie udało się zapisać.");
-          });
-
-        }, () => {
-          alert("Nie można pobrać lokalizacji.");
-        });
-      } else {
-        alert("Twoja przeglądarka nie obsługuje geolokalizacji.");
-      }
-    });
-
-    document.getElementById("undo-btn").addEventListener("click", () => {
-      if (!ostatniZapisId) {
-        alert("Brak lokalizacji do cofnięcia.");
-        return;
-      }
-
-      db.collection("lokalizacje").doc(ostatniZapisId).delete()
-        .then(() => {
-          console.log("Usunięto ostatnią lokalizację.");
-          if (ostatniMarker) {
-            map.removeLayer(ostatniMarker);
-          }
-          ostatniZapisId = null;
-          ostatniMarker = null;
-        })
-        .catch((error) => {
-          console.error("Błąd przy usuwaniu:", error);
-          alert("Nie udało się usunąć lokalizacji.");
-        });
-    });
-
-    document.getElementById("filtruj-btn").addEventListener("click", () => {
-      const dataOd = document.getElementById("dataOd").value;
-      const dataDo = document.getElementById("dataDo").value;
-
-      let query = db.collection("lokalizacje");
-
-      if (dataOd) {
-        const od = new Date(dataOd);
-        query = query.where("timestamp", ">=", firebase.firestore.Timestamp.fromDate(od));
-      }
-
-      if (dataDo) {
-        const do_ = new Date(dataDo);
-        do_.setHours(23, 59, 59, 999);
-        query = query.where("timestamp", "<=", firebase.firestore.Timestamp.fromDate(do_));
-      }
-
-      wczytajLokalizacje(query);
-    });
-  </script>
-</body>
-</html>
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z
